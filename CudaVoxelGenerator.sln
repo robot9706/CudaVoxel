@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30330.147
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CudaVoxelGenerator", "CudaVoxelGenerator\CudaVoxelGenerator.vcxproj", "{3015FDC2-A664-4331-8910-42D05C53C2B1}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3015FDC2-A664-4331-8910-42D05C53C2B1}.Debug|x64.ActiveCfg = Debug|x64
+		{3015FDC2-A664-4331-8910-42D05C53C2B1}.Debug|x64.Build.0 = Debug|x64
+		{3015FDC2-A664-4331-8910-42D05C53C2B1}.Release|x64.ActiveCfg = Release|x64
+		{3015FDC2-A664-4331-8910-42D05C53C2B1}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {052291C7-4A92-4321-84F3-4B38A1025B13}
+	EndGlobalSection
+EndGlobal

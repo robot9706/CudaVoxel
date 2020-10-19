@@ -86,15 +86,27 @@
     <CudaCompile Include="kernel.cu" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="chunk.h" />
     <ClInclude Include="gl.h" />
     <ClInclude Include="log.h" />
     <ClInclude Include="main.h" />
+    <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="chunk.cpp" />
     <ClCompile Include="entry.cpp" />
     <ClCompile Include="gl.cpp" />
     <ClCompile Include="graphics.cpp" />
     <ClCompile Include="loop.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="blocks.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Resource.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="blocks.img" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

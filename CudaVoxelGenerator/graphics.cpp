@@ -13,6 +13,8 @@ static EGLSurface eglSurface;
 
 static wstring eglWindowClass = L"CudaVoxel";
 
+static POINT screenSize;
+
 static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
@@ -41,6 +43,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		botRight.y = winRect.bottom;
 		ClientToScreen(hWnd, &botRight);
 
+		screenSize.x = botRight.x - topLeft.x;
+		screenSize.y = botRight.y - topLeft.y;
+
 		glViewport(0, 0, (GLsizei)(botRight.x - topLeft.x), (GLsizei)(botRight.y - topLeft.y));
 
 		break;
@@ -52,6 +57,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 static bool egl_window_create(LONG width, LONG height, wstring title)
 {
+	screenSize.x = width;
+	screenSize.y = height;
+
 	WNDCLASSEXW windowClass = { 0 };
 	windowClass.cbSize = sizeof(WNDCLASSEXW);
 	windowClass.style = CS_OWNDC;
@@ -237,4 +245,9 @@ bool graphics_swap()
 	}
 
 	return true;
+}
+
+POINT graphics_size()
+{
+	return screenSize;
 }

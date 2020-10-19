@@ -2,28 +2,37 @@
 #include "log.h"
 #include "gl.h"
 
+#include "chunk.h"
+
+#include "resource.h"
+
+#include <Windows.h>
+
 #include <string>
 using namespace std;
 
-const char* color_shader_vs = "precision mediump float;"
+// Projection * View * Model
+
+static const char* color_shader_vs = "precision mediump float;"
 "attribute vec3 vPos;"
-"attribute vec3 vColor;"
+"attribute vec2 vUV;"
 "uniform mat4 mat;"
-"varying vec3 color;"
+"varying vec2 uv;"
 "void main(void)"
 "{"
-"color = vColor;"
+"uv = vUV;"
 "gl_Position = mat * vec4(vPos.x, vPos.y, vPos.z, 1.0);"
 "}";
 
-const char* color_shader_fs = "precision mediump float;"
-"varying vec3 color;"
+static const char* color_shader_fs = "precision mediump float;"
+"varying vec2 uv;"
+"uniform sampler2D tex;"
 "void main (void)"
 "{"
-"gl_FragColor = vec4(color.x, color.y, color.z, 1.0);"
+"gl_FragColor = texture2D(tex, uv);"
 "}";
 
-GLuint gl_shader_create(const char* vsSource, const char* fsSource)
+static GLuint gl_shader_create(const char* vsSource, const char* fsSource)
 {
 	int result = GL_FALSE;
 	int infoLength = 0;
@@ -78,21 +87,106 @@ GLuint gl_shader_create(const char* vsSource, const char* fsSource)
 	return program;
 }
 
-void gl_buffer_test(GLuint* vertexBuffer, GLuint* indexBuffer)
+static GLuint gl_load_texture(int resourceID)
+{
+	HRSRC resource = FindResource(NULL, MAKEINTRESOURCEA(resourceID), __TEXT("BIN"));
+	HGLOBAL resourceMemory = LoadResource(NULL, resource);
+
+	size_t resourceSize = SizeofResource(NULL, resource);
+	LPVOID resourceData = LockResource(resourceMemory);
+	uint8_t* resourceDataPointer = (uint8_t*)resourceData;
+
+	uint16_t width = *(uint16_t*)(&resourceDataPointer[0]);
+	uint16_t height = *(uint16_t*)(&resourceDataPointer[2]);
+
+	GLuint textureID;
+	glGenTextures(1, &textureID);
+	glBindTexture(GL_TEXTURE_2D, textureID);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, (void*)&resourceDataPointer[4]);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	UnlockResource(resourceMemory);
+
+	return textureID;
+}
+
+static GLuint shaderTexture;
+static GLuint shaderTextureMatrix;
+static GLuint shaderTextureSampler;
+
+static GLuint textureBlocks;
+
+static Chunk* chunk;
+
+static void render_chunk(Chunk* chunk, mat4 viewProj)
+{
+	mat4 world = viewProj * translate(chunk->getChunkPosition() * vec3(CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE));
+	glUniformMatrix4fv(shaderTextureMatrix, 1, GL_FALSE, value_ptr(world));
+
+	chunk->render();
+}
+
+void gl_setup()
+{
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_FRONT);
+	glFrontFace(GL_CCW);
+
+	shaderTexture = gl_shader_create(color_shader_vs, color_shader_fs);
+	shaderTextureMatrix = glGetUniformLocation(shaderTexture, "mat");
+	shaderTextureSampler = glGetUniformLocation(shaderTexture, "tex");
+
+	textureBlocks = gl_load_texture(IDR_BIN1);
+
+	chunk = new Chunk(vec3(0,0,0));
+	chunk->generate();
+}
+
+void gl_frame()
+{
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	// Setup shader
+	glUseProgram(shaderTexture);
+
+	POINT screenSize = graphics_size();
+	mat4 proj = perspectiveFov(radians(100.0f), (float)screenSize.x, (float)screenSize.y, 0.01f, 100.0f);
+	mat4 view = lookAt(vec3(-3, 3, -3), vec3(0, 0, 0), vec3(0, 1, 0));
+
+	mat4 viewProj = proj * view;
+
+	// Bind texture
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, textureBlocks);
+	glUniform1i(shaderTextureSampler, 0);
+
+	// Bind VBO
+	glEnableVertexAttribArray(0); // Position
+	glEnableVertexAttribArray(1); // UV
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)0);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)(sizeof(float) * 3));
+
+	// Render chunk
+	render_chunk(chunk, viewProj);
+}
+
+void gl_create_buffer(GLuint* vertexBuffer, GLuint* indexBuffer, float* vertexData, int numVertices, uint16_t* indexData, int numIndex)
 {
 	glEnableVertexAttribArray(0); // Position
-	glEnableVertexAttribArray(1); // Color
+	glEnableVertexAttribArray(1); // UV
 
 	glGenBuffers(1, vertexBuffer);
 	glBindBuffer(GL_ARRAY_BUFFER, *vertexBuffer);
 
-	float data[] = {
-		//  X  Y  Z    R  G  B
-			0, 0, 0,   1, 0, 0,
-			1, 0, 0,   0, 1, 0,
-			1, 1, 0,   0, 0, 1,
-	};
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6 * 3, data, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * numVertices, vertexData, GL_STATIC_DRAW);
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -100,43 +194,7 @@ void gl_buffer_test(GLuint* vertexBuffer, GLuint* indexBuffer)
 	glGenBuffers(1, indexBuffer);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *indexBuffer);
 
-	short index[] = { 0, 1, 2 };
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(short) * 3, index, GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint16_t) * numIndex, indexData, GL_STATIC_DRAW);
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-}
-
-static GLuint shaderColor;
-static GLuint shaderColorMatrix;
-
-static GLuint vbo;
-static GLuint ibo;
-
-void gl_setup()
-{
-	shaderColor = gl_shader_create(color_shader_vs, color_shader_fs);
-	shaderColorMatrix = glGetUniformLocation(shaderColor, "mat");
-	gl_buffer_test(&vbo, &ibo);
-}
-
-void gl_frame()
-{
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	glUseProgram(shaderColor);
-
-	mat4 orthoMat = ortho(0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f);
-	glUniformMatrix4fv(shaderColorMatrix, 1, GL_FALSE, value_ptr(orthoMat));
-
-	// Bind stuff
-	glEnableVertexAttribArray(0); // Position
-	glEnableVertexAttribArray(1); // Color
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
-
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 6, (void*)0);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 6, (void*)(sizeof(float) * 3));
-
-	// Draw quad
-	glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_SHORT, NULL);
 }

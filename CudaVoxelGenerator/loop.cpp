@@ -39,7 +39,7 @@ void main_loop()
 		runTime += deltaTime;
 
 		//Call the runtime to do a game loop
-		gl_frame();
+		gl_frame(deltaTime);
 
 		//Present the new frame
 		if (!graphics_swap())

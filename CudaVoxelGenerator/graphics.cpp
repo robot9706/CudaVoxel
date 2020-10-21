@@ -15,6 +15,8 @@ static wstring eglWindowClass = L"CudaVoxel";
 
 static POINT screenSize;
 
+static bool keyboardStates[256] = { false };
+
 static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
@@ -48,6 +50,27 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 		glViewport(0, 0, (GLsizei)(botRight.x - topLeft.x), (GLsizei)(botRight.y - topLeft.y));
 
+		break;
+	}
+
+	// Keyboard
+	case WM_KEYDOWN:
+	case WM_SYSKEYDOWN:
+	{
+		if (wParam >= 0 && wParam < 256)
+		{
+			keyboardStates[wParam] = true;
+		}
+		break;
+	}
+
+	case WM_KEYUP:
+	case WM_SYSKEYUP:
+	{
+		if (wParam >= 0 && wParam < 256)
+		{
+			keyboardStates[wParam] = false;
+		}
 		break;
 	}
 	}
@@ -250,4 +273,9 @@ bool graphics_swap()
 POINT graphics_size()
 {
 	return screenSize;
+}
+
+bool keyboard_check(int key)
+{
+	return keyboardStates[key];
 }

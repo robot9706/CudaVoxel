@@ -1,8 +1,24 @@
 #include "chunk.h"
 #include "main.h"
 
+#include "generator.h"
+
 #include <vector>
 using namespace std;
+
+struct block_def {
+	uint8_t textures[6]; //Top,Bottom,Left,Right,Forward,Backward
+};
+
+#define NUM_BLOCKS 5
+block_def blocks[NUM_BLOCKS] = {
+	{.textures = { 0 } }, // Air
+
+	{.textures = { 0, 0, 0, 0, 0, 0 } }, // Stone
+	{.textures = { 1, 1, 1, 1, 1, 1 } }, // Dirt
+	{.textures = { 3, 1, 2, 2, 2, 2 } }, // Grass
+	{.textures = { 4, 4, 4, 4, 4, 4 } } // Sand
+};
 
 Chunk::Chunk(vec3 chunkPosition)
 {
@@ -49,86 +65,109 @@ static void get_block_uv(int textureIndex, float* uvs)
 	uvs[7] = (texY + 1) * cellSize;
 }
 
-static void build_block(uint8_t id, float x, float y, float z, vector<float> *vertices, vector<uint16_t> *indices)
+static void build_block(uint8_t id, float x, float y, float z, vector<float> *vertices, vector<uint32_t> *indices)
 {
-	// TODO: Cuda?
+	block_def* block = &blocks[id];
 
-	uint16_t baseIndex;
+	uint32_t baseIndex;
 	float uvs[8];
 	
 	// Top
-	baseIndex = (uint16_t)vertices->size();
+	baseIndex = (uint32_t)(vertices->size() / 5);
 
-	get_block_uv(2, uvs);
+	get_block_uv(block->textures[0], uvs);
 
 	vertices->insert(vertices->end(), { x,     y + 1, z,     uvs[0], uvs[1] });
 	vertices->insert(vertices->end(), { x + 1, y + 1, z,     uvs[2], uvs[3] });
 	vertices->insert(vertices->end(), { x + 1, y + 1, z + 1, uvs[6], uvs[7] });
 	vertices->insert(vertices->end(), { x,     y + 1, z + 1, uvs[4], uvs[5] });
 
-	indices->insert(indices->end(), { baseIndex, (uint16_t)(baseIndex + 1), (uint16_t)(baseIndex + 2), (uint16_t)(baseIndex + 2), (uint16_t)(baseIndex + 3), baseIndex });
+	indices->insert(indices->end(), { baseIndex, (uint32_t)(baseIndex + 1), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 3), baseIndex });
 
 	// Bottom
-	baseIndex = (uint16_t)(vertices->size() / 5);
+	baseIndex = (uint32_t)(vertices->size() / 5);
+
+	get_block_uv(block->textures[1], uvs);
 
 	vertices->insert(vertices->end(), { x,     y, z,     uvs[0], uvs[1] });
 	vertices->insert(vertices->end(), { x + 1, y, z,     uvs[2], uvs[3] });
 	vertices->insert(vertices->end(), { x + 1, y, z + 1, uvs[6], uvs[7] });
 	vertices->insert(vertices->end(), { x,     y, z + 1, uvs[4], uvs[5] });
 
-	indices->insert(indices->end(), { (uint16_t)(baseIndex + 2), (uint16_t)(baseIndex + 1), baseIndex, baseIndex, (uint16_t)(baseIndex + 3), (uint16_t)(baseIndex + 2) });
+	indices->insert(indices->end(), { (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 1), baseIndex, baseIndex, (uint32_t)(baseIndex + 3), (uint32_t)(baseIndex + 2) });
 
 	// Right
-	baseIndex = (uint16_t)(vertices->size() / 5);
+	baseIndex = (uint32_t)(vertices->size() / 5);
+
+	get_block_uv(block->textures[3], uvs);
 
 	vertices->insert(vertices->end(), { x + 1, y,     z,     uvs[4], uvs[5] });
 	vertices->insert(vertices->end(), { x + 1, y + 1, z,     uvs[0], uvs[1] });
 	vertices->insert(vertices->end(), { x + 1, y + 1, z + 1, uvs[2], uvs[3] });
 	vertices->insert(vertices->end(), { x + 1, y,     z + 1, uvs[6], uvs[7] });
 		
-	indices->insert(indices->end(), { (uint16_t)(baseIndex + 2), (uint16_t)(baseIndex + 1), baseIndex, baseIndex, (uint16_t)(baseIndex + 3), (uint16_t)(baseIndex + 2) });
+	indices->insert(indices->end(), { (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 1), baseIndex, baseIndex, (uint32_t)(baseIndex + 3), (uint32_t)(baseIndex + 2) });
 
 	// Left
-	baseIndex = (uint16_t)(vertices->size() / 5);
+	baseIndex = (uint32_t)(vertices->size() / 5);
+
+	get_block_uv(block->textures[2], uvs);
 
 	vertices->insert(vertices->end(), { x, y,     z,     uvs[6], uvs[7] });
 	vertices->insert(vertices->end(), { x, y + 1, z,     uvs[2], uvs[3] });
 	vertices->insert(vertices->end(), { x, y + 1, z + 1, uvs[0], uvs[1] });
 	vertices->insert(vertices->end(), { x, y,     z + 1, uvs[4], uvs[5] });
 		
-	indices->insert(indices->end(), { baseIndex, (uint16_t)(baseIndex + 1), (uint16_t)(baseIndex + 2), (uint16_t)(baseIndex + 2), (uint16_t)(baseIndex + 3), baseIndex });
+	indices->insert(indices->end(), { baseIndex, (uint32_t)(baseIndex + 1), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 3), baseIndex });
 
 	// Back
-	baseIndex = (uint16_t)(vertices->size() / 5);
+	baseIndex = (uint32_t)(vertices->size() / 5);
+
+	get_block_uv(block->textures[5], uvs);
 
 	vertices->insert(vertices->end(), { x,     y,     z + 1, uvs[4], uvs[5] });
 	vertices->insert(vertices->end(), { x + 1, y,     z + 1, uvs[6], uvs[7] });
 	vertices->insert(vertices->end(), { x + 1, y + 1, z + 1, uvs[2], uvs[3] });
 	vertices->insert(vertices->end(), { x,     y + 1, z + 1, uvs[0], uvs[1] });
 
-	indices->insert(indices->end(), { (uint16_t)(baseIndex + 2), (uint16_t)(baseIndex + 1), baseIndex, baseIndex, (uint16_t)(baseIndex + 3), (uint16_t)(baseIndex + 2) });
+	indices->insert(indices->end(), { (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 1), baseIndex, baseIndex, (uint32_t)(baseIndex + 3), (uint32_t)(baseIndex + 2) });
 
 	// Front
-	baseIndex = (uint16_t)(vertices->size() / 5);
+	baseIndex = (uint32_t)(vertices->size() / 5);
+
+	get_block_uv(block->textures[4], uvs);
 
 	vertices->insert(vertices->end(), { x,     y,     z, uvs[4], uvs[5] });
 	vertices->insert(vertices->end(), { x + 1, y,     z, uvs[6], uvs[7] });
 	vertices->insert(vertices->end(), { x + 1, y + 1, z, uvs[2], uvs[3] });
 	vertices->insert(vertices->end(), { x,     y + 1, z, uvs[0], uvs[1] });
 
-	indices->insert(indices->end(), { baseIndex, (uint16_t)(baseIndex + 1), (uint16_t)(baseIndex + 2), (uint16_t)(baseIndex + 2), (uint16_t)(baseIndex + 3), baseIndex });
+	indices->insert(indices->end(), { baseIndex, (uint32_t)(baseIndex + 1), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 3), baseIndex });
 }
 
 void Chunk::generate()
 {
 	// Generate blocks
+	cuda_generate_chunk(this);
 
 	// Build geometry
 	vector<float> vertices;
-	vector<uint16_t> indices;
+	vector<uint32_t> indices;
 
-	// TODO: All blocks
-	build_block(0, 0, 0, 0, &vertices, &indices);
+	for (int x = 0; x < CHUNK_SIZE; x++)
+	{
+		for (int y = 0; y < CHUNK_SIZE; y++)
+		{
+			for (int z = 0; z < CHUNK_SIZE; z++)
+			{
+				int offset = CHUNK_OFFSET(x, y, z);
+				if (blocks[offset] == 0)
+					continue;
+
+				build_block(blocks[offset], x, y, z, &vertices, &indices);
+			}
+		}
+	}
 
 	gl_create_buffer(&this->vbo, &this->ibo, vertices.data(), vertices.size(), indices.data(), indices.size());
 	
@@ -137,7 +176,7 @@ void Chunk::generate()
 
 void Chunk::render()
 {
-	if (this->vbo == 0 || this->ibo == 0) 
+	if (this->vbo == 0 || this->ibo == 0 || this->numRender == 0)
 	{
 		return;
 	}
@@ -145,5 +184,5 @@ void Chunk::render()
 	glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ibo);
 
-	glDrawElements(GL_TRIANGLES, this->numRender, GL_UNSIGNED_SHORT, NULL);
+	glDrawElements(GL_TRIANGLES, this->numRender, GL_UNSIGNED_INT, NULL);
 }

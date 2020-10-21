@@ -22,10 +22,12 @@ bool graphics_swap();
 POINT graphics_size();
 
 void gl_setup();
-void gl_frame();
-void gl_create_buffer(GLuint* vertexBuffer, GLuint* indexBuffer, float* vertexData, int numVertices, uint16_t* indexData, int numIndex);
+void gl_frame(float dt);
+void gl_create_buffer(GLuint* vertexBuffer, GLuint* indexBuffer, float* vertexData, int numVertices, uint32_t* indexData, int numIndex);
 
 void main_loop();
 void main_exit();
+
+bool keyboard_check(int key);
 
 #endif

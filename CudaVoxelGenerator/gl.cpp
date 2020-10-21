@@ -13,6 +13,9 @@ using namespace std;
 
 // Projection * View * Model
 
+#define CAMERA_ROTATION_SPEED (3.14f)
+#define CAMERA_MOVEMENT_SPEED (5.0f)
+
 static const char* color_shader_vs = "precision mediump float;"
 "attribute vec3 vPos;"
 "attribute vec2 vUV;"
@@ -124,6 +127,9 @@ static GLuint shaderTextureSampler;
 
 static GLuint textureBlocks;
 
+static vec3 cameraPosition = vec3(-2, 2, -2);
+static vec2 cameraRotation = vec2(0, 3.14f);
+
 static Chunk* chunk;
 
 static void render_chunk(Chunk* chunk, mat4 viewProj)
@@ -140,6 +146,8 @@ void gl_setup()
 	glCullFace(GL_FRONT);
 	glFrontFace(GL_CCW);
 
+	glEnable(GL_DEPTH_TEST);
+
 	shaderTexture = gl_shader_create(color_shader_vs, color_shader_fs);
 	shaderTextureMatrix = glGetUniformLocation(shaderTexture, "mat");
 	shaderTextureSampler = glGetUniformLocation(shaderTexture, "tex");
@@ -150,18 +158,60 @@ void gl_setup()
 	chunk->generate();
 }
 
-void gl_frame()
+void gl_frame(float dt)
 {
+	// Camera
+	if (keyboard_check(VK_RIGHT))
+	{
+		cameraRotation.y -= CAMERA_ROTATION_SPEED * dt;
+	}
+	if (keyboard_check(VK_LEFT))
+	{
+		cameraRotation.y += CAMERA_ROTATION_SPEED * dt;
+	}
+	if (keyboard_check(VK_UP))
+	{
+		cameraRotation.x += CAMERA_ROTATION_SPEED * dt;
+	}
+	if (keyboard_check(VK_DOWN))
+	{
+		cameraRotation.x -= CAMERA_ROTATION_SPEED * dt;
+	}
+
+	mat4 cameraRotationMatrix = rotate(cameraRotation.y, vec3(0, 1, 0)) * rotate(cameraRotation.x, vec3(1, 0, 0));
+	vec3 cameraForward = vec3(cameraRotationMatrix * vec4(0, 0, -1, 0));
+	vec3 cameraRight = vec3(cameraRotationMatrix * vec4(1, 0, 0, 0));
+
+	float speed = (keyboard_check(VK_SHIFT) ? CAMERA_MOVEMENT_SPEED * 2.0f : CAMERA_MOVEMENT_SPEED);
+
+	if (keyboard_check('W'))
+	{
+		cameraPosition += cameraForward * dt * speed;
+	}
+	if (keyboard_check('S'))
+	{
+		cameraPosition -= cameraForward * dt * speed;
+	}
+	if (keyboard_check('D'))
+	{
+		cameraPosition += cameraRight * dt * speed;
+	}
+	if (keyboard_check('A'))
+	{
+		cameraPosition -= cameraRight * dt * speed;
+	}
+
+	POINT screenSize = graphics_size();
+	mat4 proj = perspectiveFov(radians(100.0f), (float)screenSize.x, (float)screenSize.y, 0.01f, 100.0f);
+	mat4 view = lookAt(cameraPosition, cameraPosition + cameraForward, vec3(0, 1, 0));
+
+	mat4 viewProj = proj * view;
+
+	// Clear
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	// Setup shader
 	glUseProgram(shaderTexture);
-
-	POINT screenSize = graphics_size();
-	mat4 proj = perspectiveFov(radians(100.0f), (float)screenSize.x, (float)screenSize.y, 0.01f, 100.0f);
-	mat4 view = lookAt(vec3(-3, 3, -3), vec3(0, 0, 0), vec3(0, 1, 0));
-
-	mat4 viewProj = proj * view;
 
 	// Bind texture
 	glActiveTexture(GL_TEXTURE0);
@@ -171,14 +221,14 @@ void gl_frame()
 	// Bind VBO
 	glEnableVertexAttribArray(0); // Position
 	glEnableVertexAttribArray(1); // UV
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)0);
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)(sizeof(float) * 3));
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)0); //XYZ--
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)(sizeof(float) * 3)); //---UV
 
 	// Render chunk
 	render_chunk(chunk, viewProj);
 }
 
-void gl_create_buffer(GLuint* vertexBuffer, GLuint* indexBuffer, float* vertexData, int numVertices, uint16_t* indexData, int numIndex)
+void gl_create_buffer(GLuint* vertexBuffer, GLuint* indexBuffer, float* vertexData, int numVertices, uint32_t* indexData, int numIndex)
 {
 	glEnableVertexAttribArray(0); // Position
 	glEnableVertexAttribArray(1); // UV
@@ -194,7 +244,7 @@ void gl_create_buffer(GLuint* vertexBuffer, GLuint* indexBuffer, float* vertexDa
 	glGenBuffers(1, indexBuffer);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *indexBuffer);
 
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint16_t) * numIndex, indexData, GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t) * numIndex, indexData, GL_STATIC_DRAW);
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }

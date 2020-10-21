@@ -1,0 +1,42 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="chunk.cpp" />
+    <ClCompile Include="entry.cpp" />
+    <ClCompile Include="gl.cpp" />
+    <ClCompile Include="graphics.cpp" />
+    <ClCompile Include="loop.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="chunk.h" />
+    <ClInclude Include="gl.h" />
+    <ClInclude Include="log.h" />
+    <ClInclude Include="main.h" />
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="generator.h">
+      <Filter>generator</Filter>
+    </ClInclude>
+    <ClInclude Include="simplex.cuh">
+      <Filter>generator</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Resource.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="blocks.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="blocks.img" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="generator">
+      <UniqueIdentifier>{822e4cbe-85e6-443f-973f-3618bd2280c5}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="generator.cu">
+      <Filter>generator</Filter>
+    </CudaCompile>
+  </ItemGroup>
+</Project>

@@ -8,6 +8,8 @@
 #define CHUNK_SIZE 16
 #define CHUNK_BLOCKS (CHUNK_SIZE*CHUNK_SIZE*CHUNK_SIZE)
 
+#define CHUNK_OFFSET(X,Y,Z) (Z*CHUNK_SIZE*CHUNK_SIZE+Y*CHUNK_SIZE+X)
+
 #include "gl.h"
 
 #include <stdint.h>
@@ -15,8 +17,6 @@ using namespace std;
 
 class Chunk {
 private:
-	uint8_t* blocks;
-
 	vec3 chunkPosition;
 
 	GLuint vbo;
@@ -25,6 +25,8 @@ private:
 	int numRender;
 
 public:
+	uint8_t* blocks;
+
 	Chunk(vec3 chunkPosition);
 	~Chunk();
 

@@ -184,5 +184,8 @@ void Chunk::render()
 	glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ibo);
 
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)0); //XYZ--
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)(sizeof(float) * 3)); //---UV
+
 	glDrawElements(GL_TRIANGLES, this->numRender, GL_UNSIGNED_INT, NULL);
 }

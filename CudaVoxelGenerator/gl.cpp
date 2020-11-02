@@ -130,7 +130,9 @@ static GLuint textureBlocks;
 static vec3 cameraPosition = vec3(-2, 2, -2);
 static vec2 cameraRotation = vec2(0, 3.14f);
 
-static Chunk* chunk;
+#define NUM_CHUNK_AXIS 2
+#define NUM_CHUNKS (NUM_CHUNK_AXIS*NUM_CHUNK_AXIS)
+static Chunk** chunks;
 
 static void render_chunk(Chunk* chunk, mat4 viewProj)
 {
@@ -154,8 +156,16 @@ void gl_setup()
 
 	textureBlocks = gl_load_texture(IDR_BIN1);
 
-	chunk = new Chunk(vec3(0,0,0));
-	chunk->generate();
+	chunks = new Chunk*[NUM_CHUNKS];
+	memset(chunks, NULL, sizeof(Chunk*) * NUM_CHUNKS);
+	for (int i = 0; i < NUM_CHUNKS; i++)
+	{
+		int x = i % NUM_CHUNK_AXIS;
+		int y = i / NUM_CHUNK_AXIS;
+
+		chunks[i] = new Chunk(vec3(x, 0, y));
+		chunks[i]->generate();
+	}
 }
 
 void gl_frame(float dt)
@@ -221,11 +231,17 @@ void gl_frame(float dt)
 	// Bind VBO
 	glEnableVertexAttribArray(0); // Position
 	glEnableVertexAttribArray(1); // UV
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)0); //XYZ--
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)(sizeof(float) * 3)); //---UV
 
-	// Render chunk
-	render_chunk(chunk, viewProj);
+	// Render chunks
+	for (int x = 0; x < NUM_CHUNKS; x++)
+	{
+		if (chunks[x] == NULL)
+		{
+			continue;
+		}
+
+		render_chunk(chunks[x], viewProj);
+	}
 }
 
 void gl_create_buffer(GLuint* vertexBuffer, GLuint* indexBuffer, float* vertexData, int numVertices, uint32_t* indexData, int numIndex)

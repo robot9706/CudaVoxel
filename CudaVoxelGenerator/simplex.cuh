@@ -148,3 +148,19 @@ __device__ float simplexNoise(float3 pos, float scale, int seed)
 
 	return 32.0f * (n0 + n1 + n2 + n3);
 }
+
+__device__ float repeaterSimplex(float3 pos, float scale, int seed, int n, float lacunarity, float decay)
+{
+	float acc = 0.0f;
+	float amp = 1.0f;
+
+	for (int i = 0; i < n; i++)
+	{
+		acc += simplexNoise(make_float3(pos.x, pos.y, pos.z), scale, seed) * amp * 0.35f;
+		scale *= lacunarity;
+		amp *= decay;
+		seed = seed ^ ((i + 672381) * 200394);
+	}
+
+	return acc;
+}

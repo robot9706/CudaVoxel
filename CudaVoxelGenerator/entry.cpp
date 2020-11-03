@@ -15,6 +15,7 @@ int main()
     gl_setup();
     main_loop();
 
+    gl_cleanup();
     cuda_generate_clean();
     CUDA_CHECK(cudaDeviceReset());
     graphics_cleanup();

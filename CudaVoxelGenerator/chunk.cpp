@@ -20,12 +20,13 @@ block_def blocks[NUM_BLOCKS] = {
 	{.textures = { 4, 4, 4, 4, 4, 4 } } // Sand
 };
 
-Chunk::Chunk(vec3 chunkPosition)
+Chunk::Chunk(int3 chunkPosition)
 {
 	this->chunkPosition = chunkPosition;
 	this->vbo = 0;
 	this->ibo = 0;
 	this->numRender = 0;
+	this->geometryDirty = false;
 
 	this->blocks = (uint8_t*)malloc(CHUNK_BLOCKS);
 	memset(this->blocks, 0, CHUNK_BLOCKS);
@@ -36,7 +37,7 @@ Chunk::~Chunk()
 	free(this->blocks);
 }
 
-vec3 Chunk::getChunkPosition()
+int3 Chunk::getChunkPosition()
 {
 	return this->chunkPosition;
 }
@@ -65,84 +66,114 @@ static void get_block_uv(int textureIndex, float* uvs)
 	uvs[7] = (texY + 1) * cellSize;
 }
 
-static void build_block(uint8_t id, float x, float y, float z, vector<float> *vertices, vector<uint32_t> *indices)
+static bool is_transparent(Chunk* chunk, int x, int y, int z)
+{
+	if (x < 0 || y < 0 || z < 0 || x >= CHUNK_SIZE || y >= CHUNK_SIZE || z >= CHUNK_SIZE)
+		return true;
+
+	return (chunk->blocks[CHUNK_OFFSET(x,y,z)] == 0);
+}
+
+static void build_block(Chunk* chunk, uint8_t id, int blockX, int blockY, float blockZ, vector<float> *vertices, vector<uint32_t> *indices)
 {
 	block_def* block = &blocks[id];
 
 	uint32_t baseIndex;
 	float uvs[8];
+
+	float x = blockX;
+	float y = blockY;
+	float z = blockZ;
 	
 	// Top
-	baseIndex = (uint32_t)(vertices->size() / 5);
+	if (is_transparent(chunk, x, y + 1, z)) 
+	{
+		baseIndex = (uint32_t)(vertices->size() / 5);
 
-	get_block_uv(block->textures[0], uvs);
+		get_block_uv(block->textures[0], uvs);
 
-	vertices->insert(vertices->end(), { x,     y + 1, z,     uvs[0], uvs[1] });
-	vertices->insert(vertices->end(), { x + 1, y + 1, z,     uvs[2], uvs[3] });
-	vertices->insert(vertices->end(), { x + 1, y + 1, z + 1, uvs[6], uvs[7] });
-	vertices->insert(vertices->end(), { x,     y + 1, z + 1, uvs[4], uvs[5] });
+		vertices->insert(vertices->end(), { x,     y + 1, z,     uvs[0], uvs[1] });
+		vertices->insert(vertices->end(), { x + 1, y + 1, z,     uvs[2], uvs[3] });
+		vertices->insert(vertices->end(), { x + 1, y + 1, z + 1, uvs[6], uvs[7] });
+		vertices->insert(vertices->end(), { x,     y + 1, z + 1, uvs[4], uvs[5] });
 
-	indices->insert(indices->end(), { baseIndex, (uint32_t)(baseIndex + 1), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 3), baseIndex });
+		indices->insert(indices->end(), { baseIndex, (uint32_t)(baseIndex + 1), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 3), baseIndex });
+	}
 
 	// Bottom
-	baseIndex = (uint32_t)(vertices->size() / 5);
+	if (is_transparent(chunk, x, y - 1, z))
+	{
+		baseIndex = (uint32_t)(vertices->size() / 5);
 
-	get_block_uv(block->textures[1], uvs);
+		get_block_uv(block->textures[1], uvs);
 
-	vertices->insert(vertices->end(), { x,     y, z,     uvs[0], uvs[1] });
-	vertices->insert(vertices->end(), { x + 1, y, z,     uvs[2], uvs[3] });
-	vertices->insert(vertices->end(), { x + 1, y, z + 1, uvs[6], uvs[7] });
-	vertices->insert(vertices->end(), { x,     y, z + 1, uvs[4], uvs[5] });
+		vertices->insert(vertices->end(), { x,     y, z,     uvs[0], uvs[1] });
+		vertices->insert(vertices->end(), { x + 1, y, z,     uvs[2], uvs[3] });
+		vertices->insert(vertices->end(), { x + 1, y, z + 1, uvs[6], uvs[7] });
+		vertices->insert(vertices->end(), { x,     y, z + 1, uvs[4], uvs[5] });
 
-	indices->insert(indices->end(), { (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 1), baseIndex, baseIndex, (uint32_t)(baseIndex + 3), (uint32_t)(baseIndex + 2) });
+		indices->insert(indices->end(), { (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 1), baseIndex, baseIndex, (uint32_t)(baseIndex + 3), (uint32_t)(baseIndex + 2) });
+	}
 
 	// Right
-	baseIndex = (uint32_t)(vertices->size() / 5);
+	if (is_transparent(chunk, x + 1, y, z))
+	{
+		baseIndex = (uint32_t)(vertices->size() / 5);
 
-	get_block_uv(block->textures[3], uvs);
+		get_block_uv(block->textures[3], uvs);
 
-	vertices->insert(vertices->end(), { x + 1, y,     z,     uvs[4], uvs[5] });
-	vertices->insert(vertices->end(), { x + 1, y + 1, z,     uvs[0], uvs[1] });
-	vertices->insert(vertices->end(), { x + 1, y + 1, z + 1, uvs[2], uvs[3] });
-	vertices->insert(vertices->end(), { x + 1, y,     z + 1, uvs[6], uvs[7] });
-		
-	indices->insert(indices->end(), { (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 1), baseIndex, baseIndex, (uint32_t)(baseIndex + 3), (uint32_t)(baseIndex + 2) });
+		vertices->insert(vertices->end(), { x + 1, y,     z,     uvs[4], uvs[5] });
+		vertices->insert(vertices->end(), { x + 1, y + 1, z,     uvs[0], uvs[1] });
+		vertices->insert(vertices->end(), { x + 1, y + 1, z + 1, uvs[2], uvs[3] });
+		vertices->insert(vertices->end(), { x + 1, y,     z + 1, uvs[6], uvs[7] });
+
+		indices->insert(indices->end(), { (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 1), baseIndex, baseIndex, (uint32_t)(baseIndex + 3), (uint32_t)(baseIndex + 2) });
+	}
 
 	// Left
-	baseIndex = (uint32_t)(vertices->size() / 5);
+	if (is_transparent(chunk, x - 1, y, z))
+	{
+		baseIndex = (uint32_t)(vertices->size() / 5);
 
-	get_block_uv(block->textures[2], uvs);
+		get_block_uv(block->textures[2], uvs);
 
-	vertices->insert(vertices->end(), { x, y,     z,     uvs[6], uvs[7] });
-	vertices->insert(vertices->end(), { x, y + 1, z,     uvs[2], uvs[3] });
-	vertices->insert(vertices->end(), { x, y + 1, z + 1, uvs[0], uvs[1] });
-	vertices->insert(vertices->end(), { x, y,     z + 1, uvs[4], uvs[5] });
-		
-	indices->insert(indices->end(), { baseIndex, (uint32_t)(baseIndex + 1), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 3), baseIndex });
+		vertices->insert(vertices->end(), { x, y,     z,     uvs[6], uvs[7] });
+		vertices->insert(vertices->end(), { x, y + 1, z,     uvs[2], uvs[3] });
+		vertices->insert(vertices->end(), { x, y + 1, z + 1, uvs[0], uvs[1] });
+		vertices->insert(vertices->end(), { x, y,     z + 1, uvs[4], uvs[5] });
+
+		indices->insert(indices->end(), { baseIndex, (uint32_t)(baseIndex + 1), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 3), baseIndex });
+	}
 
 	// Back
-	baseIndex = (uint32_t)(vertices->size() / 5);
+	if (is_transparent(chunk, x, y, z + 1))
+	{
+		baseIndex = (uint32_t)(vertices->size() / 5);
 
-	get_block_uv(block->textures[5], uvs);
+		get_block_uv(block->textures[5], uvs);
 
-	vertices->insert(vertices->end(), { x,     y,     z + 1, uvs[4], uvs[5] });
-	vertices->insert(vertices->end(), { x + 1, y,     z + 1, uvs[6], uvs[7] });
-	vertices->insert(vertices->end(), { x + 1, y + 1, z + 1, uvs[2], uvs[3] });
-	vertices->insert(vertices->end(), { x,     y + 1, z + 1, uvs[0], uvs[1] });
+		vertices->insert(vertices->end(), { x,     y,     z + 1, uvs[4], uvs[5] });
+		vertices->insert(vertices->end(), { x + 1, y,     z + 1, uvs[6], uvs[7] });
+		vertices->insert(vertices->end(), { x + 1, y + 1, z + 1, uvs[2], uvs[3] });
+		vertices->insert(vertices->end(), { x,     y + 1, z + 1, uvs[0], uvs[1] });
 
-	indices->insert(indices->end(), { (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 1), baseIndex, baseIndex, (uint32_t)(baseIndex + 3), (uint32_t)(baseIndex + 2) });
+		indices->insert(indices->end(), { (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 1), baseIndex, baseIndex, (uint32_t)(baseIndex + 3), (uint32_t)(baseIndex + 2) });
+	}
 
 	// Front
-	baseIndex = (uint32_t)(vertices->size() / 5);
+	if (is_transparent(chunk, x, y, z - 1))
+	{
+		baseIndex = (uint32_t)(vertices->size() / 5);
 
-	get_block_uv(block->textures[4], uvs);
+		get_block_uv(block->textures[4], uvs);
 
-	vertices->insert(vertices->end(), { x,     y,     z, uvs[4], uvs[5] });
-	vertices->insert(vertices->end(), { x + 1, y,     z, uvs[6], uvs[7] });
-	vertices->insert(vertices->end(), { x + 1, y + 1, z, uvs[2], uvs[3] });
-	vertices->insert(vertices->end(), { x,     y + 1, z, uvs[0], uvs[1] });
+		vertices->insert(vertices->end(), { x,     y,     z, uvs[4], uvs[5] });
+		vertices->insert(vertices->end(), { x + 1, y,     z, uvs[6], uvs[7] });
+		vertices->insert(vertices->end(), { x + 1, y + 1, z, uvs[2], uvs[3] });
+		vertices->insert(vertices->end(), { x,     y + 1, z, uvs[0], uvs[1] });
 
-	indices->insert(indices->end(), { baseIndex, (uint32_t)(baseIndex + 1), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 3), baseIndex });
+		indices->insert(indices->end(), { baseIndex, (uint32_t)(baseIndex + 1), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 3), baseIndex });
+	}
 }
 
 void Chunk::generate()
@@ -151,9 +182,6 @@ void Chunk::generate()
 	cuda_generate_chunk(this);
 
 	// Build geometry
-	vector<float> vertices;
-	vector<uint32_t> indices;
-
 	for (int x = 0; x < CHUNK_SIZE; x++)
 	{
 		for (int y = 0; y < CHUNK_SIZE; y++)
@@ -164,14 +192,33 @@ void Chunk::generate()
 				if (blocks[offset] == 0)
 					continue;
 
-				build_block(blocks[offset], x, y, z, &vertices, &indices);
+				build_block(this, blocks[offset], x, y, z, &vertices, &indices);
 			}
 		}
 	}
 
+	if (vertices.size() == 0) {
+		this->numRender = 0;
+		this->geometryDirty = false;
+		return;
+	}
+
+	this->geometryDirty = true;
+}
+
+bool Chunk::upload()
+{
+	if (!this->geometryDirty) 
+	{
+		return false;
+	}
+
 	gl_create_buffer(&this->vbo, &this->ibo, vertices.data(), vertices.size(), indices.data(), indices.size());
-	
 	this->numRender = indices.size();
+
+	this->geometryDirty = false;
+
+	return true;
 }
 
 void Chunk::render()

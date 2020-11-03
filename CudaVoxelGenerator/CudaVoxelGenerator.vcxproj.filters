@@ -6,6 +6,7 @@
     <ClCompile Include="gl.cpp" />
     <ClCompile Include="graphics.cpp" />
     <ClCompile Include="loop.cpp" />
+    <ClCompile Include="world.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="chunk.h" />
@@ -19,6 +20,7 @@
     <ClInclude Include="simplex.cuh">
       <Filter>generator</Filter>
     </ClInclude>
+    <ClInclude Include="world.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

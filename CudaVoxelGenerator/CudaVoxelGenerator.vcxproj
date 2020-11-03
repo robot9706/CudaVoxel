@@ -84,6 +84,7 @@
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="world.h" />
     <CudaCompile Include="generator.cu" />
     <ClInclude Include="simplex.cuh" />
   </ItemGroup>
@@ -101,6 +102,7 @@
     <ClCompile Include="gl.cpp" />
     <ClCompile Include="graphics.cpp" />
     <ClCompile Include="loop.cpp" />
+    <ClCompile Include="world.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="blocks.png" />

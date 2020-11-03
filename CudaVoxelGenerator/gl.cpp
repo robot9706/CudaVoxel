@@ -3,6 +3,7 @@
 #include "gl.h"
 
 #include "chunk.h"
+#include "world.h"
 
 #include "resource.h"
 
@@ -16,7 +17,7 @@ using namespace std;
 #define CAMERA_ROTATION_SPEED (3.14f)
 #define CAMERA_MOVEMENT_SPEED (5.0f)
 
-static const char* color_shader_vs = "precision mediump float;"
+static const char* color_shader_vs = "precision highp float;"
 "attribute vec3 vPos;"
 "attribute vec2 vUV;"
 "uniform mat4 mat;"
@@ -27,7 +28,7 @@ static const char* color_shader_vs = "precision mediump float;"
 "gl_Position = mat * vec4(vPos.x, vPos.y, vPos.z, 1.0);"
 "}";
 
-static const char* color_shader_fs = "precision mediump float;"
+static const char* color_shader_fs = "precision highp float;"
 "varying vec2 uv;"
 "uniform sampler2D tex;"
 "void main (void)"
@@ -130,13 +131,14 @@ static GLuint textureBlocks;
 static vec3 cameraPosition = vec3(-2, 2, -2);
 static vec2 cameraRotation = vec2(0, 3.14f);
 
-#define NUM_CHUNK_AXIS 2
-#define NUM_CHUNKS (NUM_CHUNK_AXIS*NUM_CHUNK_AXIS)
-static Chunk** chunks;
+static mat4 viewProj;
 
-static void render_chunk(Chunk* chunk, mat4 viewProj)
+static World world;
+
+void gl_render_chunk(Chunk* chunk)
 {
-	mat4 world = viewProj * translate(chunk->getChunkPosition() * vec3(CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE));
+	int3 chunkPosition = chunk->getChunkPosition();
+	mat4 world = viewProj * translate(vec3(chunkPosition.x, chunkPosition.y, chunkPosition.z) * vec3(CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE));
 	glUniformMatrix4fv(shaderTextureMatrix, 1, GL_FALSE, value_ptr(world));
 
 	chunk->render();
@@ -156,16 +158,12 @@ void gl_setup()
 
 	textureBlocks = gl_load_texture(IDR_BIN1);
 
-	chunks = new Chunk*[NUM_CHUNKS];
-	memset(chunks, NULL, sizeof(Chunk*) * NUM_CHUNKS);
-	for (int i = 0; i < NUM_CHUNKS; i++)
-	{
-		int x = i % NUM_CHUNK_AXIS;
-		int y = i / NUM_CHUNK_AXIS;
+	world.start();
+}
 
-		chunks[i] = new Chunk(vec3(x, 0, y));
-		chunks[i]->generate();
-	}
+void gl_cleanup()
+{
+	world.stop();
 }
 
 void gl_frame(float dt)
@@ -212,10 +210,10 @@ void gl_frame(float dt)
 	}
 
 	POINT screenSize = graphics_size();
-	mat4 proj = perspectiveFov(radians(100.0f), (float)screenSize.x, (float)screenSize.y, 0.01f, 100.0f);
+	mat4 proj = perspectiveFov(radians(100.0f), (float)screenSize.x, (float)screenSize.y, 0.01f, 1000.0f);
 	mat4 view = lookAt(cameraPosition, cameraPosition + cameraForward, vec3(0, 1, 0));
 
-	mat4 viewProj = proj * view;
+	mat4 cameraViewProj = proj * view;
 
 	// Clear
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -232,16 +230,10 @@ void gl_frame(float dt)
 	glEnableVertexAttribArray(0); // Position
 	glEnableVertexAttribArray(1); // UV
 
-	// Render chunks
-	for (int x = 0; x < NUM_CHUNKS; x++)
-	{
-		if (chunks[x] == NULL)
-		{
-			continue;
-		}
+	// Render world
+	viewProj = cameraViewProj;
 
-		render_chunk(chunks[x], viewProj);
-	}
+	world.render(cameraPosition);
 }
 
 void gl_create_buffer(GLuint* vertexBuffer, GLuint* indexBuffer, float* vertexData, int numVertices, uint32_t* indexData, int numIndex)

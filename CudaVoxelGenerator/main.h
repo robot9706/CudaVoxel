@@ -16,14 +16,18 @@
 
 using namespace std;
 
+#include "chunk.h"
+
 bool graphics_init();
 void graphics_cleanup();
 bool graphics_swap();
 POINT graphics_size();
 
 void gl_setup();
+void gl_cleanup();
 void gl_frame(float dt);
 void gl_create_buffer(GLuint* vertexBuffer, GLuint* indexBuffer, float* vertexData, int numVertices, uint32_t* indexData, int numIndex);
+void gl_render_chunk(Chunk* chunk);
 
 void main_loop();
 void main_exit();

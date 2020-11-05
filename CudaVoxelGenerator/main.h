@@ -26,7 +26,7 @@ POINT graphics_size();
 void gl_setup();
 void gl_cleanup();
 void gl_frame(float dt);
-void gl_create_buffer(GLuint* vertexBuffer, GLuint* indexBuffer, float* vertexData, int numVertices, uint32_t* indexData, int numIndex);
+void gl_create_buffer(GLuint* vertexBuffer, GLuint* indexBuffer, float* vertexData, int numVertices, void* indexData, int indexSize);
 void gl_render_chunk(Chunk* chunk);
 
 void main_loop();

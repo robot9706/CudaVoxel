@@ -10,14 +10,16 @@ struct block_def {
 	uint8_t textures[6]; //Top,Bottom,Left,Right,Forward,Backward
 };
 
-#define NUM_BLOCKS 5
+#define NUM_BLOCKS 7
 block_def blocks[NUM_BLOCKS] = {
 	{.textures = { 0 } }, // Air
 
 	{.textures = { 0, 0, 0, 0, 0, 0 } }, // Stone
 	{.textures = { 1, 1, 1, 1, 1, 1 } }, // Dirt
 	{.textures = { 3, 1, 2, 2, 2, 2 } }, // Grass
-	{.textures = { 4, 4, 4, 4, 4, 4 } } // Sand
+	{.textures = { 4, 4, 4, 4, 4, 4 } }, // Sand
+	{.textures = { 6, 6, 5, 5, 5, 5 } }, // Log
+	{.textures = { 7, 7, 7, 7, 7, 7 } }, // Leaves
 };
 
 Chunk::Chunk(int3 chunkPosition)
@@ -35,6 +37,13 @@ Chunk::Chunk(int3 chunkPosition)
 Chunk::~Chunk()
 {
 	free(this->blocks);
+
+	if (this->vbo > 0) {
+		glDeleteBuffers(1, &this->vbo);
+	}
+	if (this->ibo > 0) {
+		glDeleteBuffers(1, &this->ibo);
+	}
 }
 
 int3 Chunk::getChunkPosition()
@@ -71,14 +80,15 @@ static bool is_transparent(Chunk* chunk, int x, int y, int z)
 	if (x < 0 || y < 0 || z < 0 || x >= CHUNK_SIZE || y >= CHUNK_SIZE || z >= CHUNK_SIZE)
 		return true;
 
-	return (chunk->blocks[CHUNK_OFFSET(x,y,z)] == 0);
+	uint8_t blockAt = chunk->blocks[CHUNK_OFFSET(x, y, z)];
+	return (blockAt == BLOCK_AIR || blockAt == BLOCK_LEAVES);
 }
 
-static void build_block(Chunk* chunk, uint8_t id, int blockX, int blockY, float blockZ, vector<float> *vertices, vector<uint32_t> *indices)
+static void build_block(Chunk* chunk, uint8_t id, int blockX, int blockY, float blockZ, vector<float> *vertices, vector<INDEX_TYPE> *indices)
 {
 	block_def* block = &blocks[id];
 
-	uint32_t baseIndex;
+	INDEX_TYPE baseIndex;
 	float uvs[8];
 
 	float x = blockX;
@@ -97,7 +107,7 @@ static void build_block(Chunk* chunk, uint8_t id, int blockX, int blockY, float 
 		vertices->insert(vertices->end(), { x + 1, y + 1, z + 1, uvs[6], uvs[7] });
 		vertices->insert(vertices->end(), { x,     y + 1, z + 1, uvs[4], uvs[5] });
 
-		indices->insert(indices->end(), { baseIndex, (uint32_t)(baseIndex + 1), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 3), baseIndex });
+		indices->insert(indices->end(), { baseIndex, (INDEX_TYPE)(baseIndex + 1), (INDEX_TYPE)(baseIndex + 2), (INDEX_TYPE)(baseIndex + 2), (INDEX_TYPE)(baseIndex + 3), baseIndex });
 	}
 
 	// Bottom
@@ -112,7 +122,7 @@ static void build_block(Chunk* chunk, uint8_t id, int blockX, int blockY, float 
 		vertices->insert(vertices->end(), { x + 1, y, z + 1, uvs[6], uvs[7] });
 		vertices->insert(vertices->end(), { x,     y, z + 1, uvs[4], uvs[5] });
 
-		indices->insert(indices->end(), { (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 1), baseIndex, baseIndex, (uint32_t)(baseIndex + 3), (uint32_t)(baseIndex + 2) });
+		indices->insert(indices->end(), { (INDEX_TYPE)(baseIndex + 2), (INDEX_TYPE)(baseIndex + 1), baseIndex, baseIndex, (INDEX_TYPE)(baseIndex + 3), (INDEX_TYPE)(baseIndex + 2) });
 	}
 
 	// Right
@@ -127,7 +137,7 @@ static void build_block(Chunk* chunk, uint8_t id, int blockX, int blockY, float 
 		vertices->insert(vertices->end(), { x + 1, y + 1, z + 1, uvs[2], uvs[3] });
 		vertices->insert(vertices->end(), { x + 1, y,     z + 1, uvs[6], uvs[7] });
 
-		indices->insert(indices->end(), { (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 1), baseIndex, baseIndex, (uint32_t)(baseIndex + 3), (uint32_t)(baseIndex + 2) });
+		indices->insert(indices->end(), { (INDEX_TYPE)(baseIndex + 2), (INDEX_TYPE)(baseIndex + 1), baseIndex, baseIndex, (INDEX_TYPE)(baseIndex + 3), (INDEX_TYPE)(baseIndex + 2) });
 	}
 
 	// Left
@@ -142,7 +152,7 @@ static void build_block(Chunk* chunk, uint8_t id, int blockX, int blockY, float 
 		vertices->insert(vertices->end(), { x, y + 1, z + 1, uvs[0], uvs[1] });
 		vertices->insert(vertices->end(), { x, y,     z + 1, uvs[4], uvs[5] });
 
-		indices->insert(indices->end(), { baseIndex, (uint32_t)(baseIndex + 1), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 3), baseIndex });
+		indices->insert(indices->end(), { baseIndex, (INDEX_TYPE)(baseIndex + 1), (INDEX_TYPE)(baseIndex + 2), (INDEX_TYPE)(baseIndex + 2), (INDEX_TYPE)(baseIndex + 3), baseIndex });
 	}
 
 	// Back
@@ -157,7 +167,7 @@ static void build_block(Chunk* chunk, uint8_t id, int blockX, int blockY, float 
 		vertices->insert(vertices->end(), { x + 1, y + 1, z + 1, uvs[2], uvs[3] });
 		vertices->insert(vertices->end(), { x,     y + 1, z + 1, uvs[0], uvs[1] });
 
-		indices->insert(indices->end(), { (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 1), baseIndex, baseIndex, (uint32_t)(baseIndex + 3), (uint32_t)(baseIndex + 2) });
+		indices->insert(indices->end(), { (INDEX_TYPE)(baseIndex + 2), (INDEX_TYPE)(baseIndex + 1), baseIndex, baseIndex, (INDEX_TYPE)(baseIndex + 3), (INDEX_TYPE)(baseIndex + 2) });
 	}
 
 	// Front
@@ -172,7 +182,7 @@ static void build_block(Chunk* chunk, uint8_t id, int blockX, int blockY, float 
 		vertices->insert(vertices->end(), { x + 1, y + 1, z, uvs[2], uvs[3] });
 		vertices->insert(vertices->end(), { x,     y + 1, z, uvs[0], uvs[1] });
 
-		indices->insert(indices->end(), { baseIndex, (uint32_t)(baseIndex + 1), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 2), (uint32_t)(baseIndex + 3), baseIndex });
+		indices->insert(indices->end(), { baseIndex, (INDEX_TYPE)(baseIndex + 1), (INDEX_TYPE)(baseIndex + 2), (INDEX_TYPE)(baseIndex + 2), (INDEX_TYPE)(baseIndex + 3), baseIndex });
 	}
 }
 
@@ -213,8 +223,11 @@ bool Chunk::upload()
 		return false;
 	}
 
-	gl_create_buffer(&this->vbo, &this->ibo, vertices.data(), vertices.size(), indices.data(), indices.size());
+	gl_create_buffer(&this->vbo, &this->ibo, vertices.data(), vertices.size(), indices.data(), indices.size() * sizeof(INDEX_TYPE));
 	this->numRender = indices.size();
+
+	vertices.clear();
+	indices.clear();
 
 	this->geometryDirty = false;
 
@@ -234,5 +247,5 @@ void Chunk::render()
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)0); //XYZ--
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)(sizeof(float) * 3)); //---UV
 
-	glDrawElements(GL_TRIANGLES, this->numRender, GL_UNSIGNED_INT, NULL);
+	glDrawElements(GL_TRIANGLES, this->numRender, INDEX_TYPE_GL, NULL);
 }

@@ -18,6 +18,8 @@ class World
 {
 private:
 	HANDLE generatorThread;
+	HANDLE regionsMutex;
+	float removeDistance;
 
 public:
 	map<uint64_t, Chunk**> regions;

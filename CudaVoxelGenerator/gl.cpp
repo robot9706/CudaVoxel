@@ -34,6 +34,7 @@ static const char* color_shader_fs = "precision highp float;"
 "void main (void)"
 "{"
 "gl_FragColor = texture2D(tex, uv);"
+"if (gl_FragColor.a<0.5) discard;"
 "}";
 
 static GLuint gl_shader_create(const char* vsSource, const char* fsSource)
@@ -152,6 +153,8 @@ void gl_setup()
 
 	glEnable(GL_DEPTH_TEST);
 
+	glClearColor(100.0f / 255.0f, 149.0f / 255.0f, 237.0f / 255.0f, 1.0f);
+
 	shaderTexture = gl_shader_create(color_shader_vs, color_shader_fs);
 	shaderTextureMatrix = glGetUniformLocation(shaderTexture, "mat");
 	shaderTextureSampler = glGetUniformLocation(shaderTexture, "tex");
@@ -210,7 +213,7 @@ void gl_frame(float dt)
 	}
 
 	POINT screenSize = graphics_size();
-	mat4 proj = perspectiveFov(radians(100.0f), (float)screenSize.x, (float)screenSize.y, 0.01f, 1000.0f);
+	mat4 proj = perspectiveFov(radians(100.0f), (float)screenSize.x, (float)screenSize.y, 0.5f, 1000.0f);
 	mat4 view = lookAt(cameraPosition, cameraPosition + cameraForward, vec3(0, 1, 0));
 
 	mat4 cameraViewProj = proj * view;
@@ -236,7 +239,7 @@ void gl_frame(float dt)
 	world.render(cameraPosition);
 }
 
-void gl_create_buffer(GLuint* vertexBuffer, GLuint* indexBuffer, float* vertexData, int numVertices, uint32_t* indexData, int numIndex)
+void gl_create_buffer(GLuint* vertexBuffer, GLuint* indexBuffer, float* vertexData, int numVertices, void* indexData, int indexSize)
 {
 	glEnableVertexAttribArray(0); // Position
 	glEnableVertexAttribArray(1); // UV
@@ -252,7 +255,7 @@ void gl_create_buffer(GLuint* vertexBuffer, GLuint* indexBuffer, float* vertexDa
 	glGenBuffers(1, indexBuffer);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *indexBuffer);
 
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t) * numIndex, indexData, GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexSize, indexData, GL_STATIC_DRAW);
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }

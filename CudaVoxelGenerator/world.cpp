@@ -92,6 +92,10 @@ World::World()
 	this->lastCenterChunk = make_int3(0, 0, 0);
 	this->generateChunks = true;
 	this->generatorSignal = CreateEvent(NULL, true, true, TEXT("GeneratorSignal"));
+	this->regionsMutex = CreateMutex(NULL, false, NULL);
+
+	float size = (VIEW_DIST_XZ + 1) * CHUNK_SIZE;
+	this->removeDistance = sqrtf(size * size + size * size);
 }
 
 World::~World()
@@ -108,6 +112,8 @@ World::~World()
 
 void World::insertChunk(Chunk* chunk)
 {
+	WaitForSingleObject(this->regionsMutex, INFINITE);
+
 	int3 chunkPos = chunk->getChunkPosition();
 	int3 regionPos = chunk_to_region(chunkPos);
 
@@ -124,6 +130,8 @@ void World::insertChunk(Chunk* chunk)
 		region[in_region_offset(chunkPos)] = chunk;
 		this->regions.insert(pair<uint64_t, Chunk**>(regionHash, region));
 	}
+
+	ReleaseMutex(this->regionsMutex);
 }
 
 bool World::hasChunk(int3 chunkPos)
@@ -150,6 +158,7 @@ void World::stop()
 	this->generateChunks = false;
 	SetEvent(this->generatorSignal);
 	CloseHandle(this->generatorThread);
+	CloseHandle(this->regionsMutex);
 
 	for (map<uint64_t, Chunk**>::iterator it = this->regions.begin(); it != this->regions.end(); ++it) {
 		for (int x = 0; x < REGION_LENGTH; x++) {
@@ -163,11 +172,50 @@ void World::stop()
 
 void World::render(vec3 center)
 {
+	WaitForSingleObject(this->regionsMutex, INFINITE);
+
 	int3 centerChunk = make_int3((int)floorf(center.x / CHUNK_SIZE), 0, (int)floorf(center.z / CHUNK_SIZE));
 
 	if (this->lastCenterChunk.x != centerChunk.x || this->lastCenterChunk.y != centerChunk.y || this->lastCenterChunk.z != centerChunk.z) {
 		this->lastCenterChunk = centerChunk;
 		SetEvent(this->generatorSignal);
+
+		vector<uint64_t> toRemove;
+		for (map<uint64_t, Chunk**>::iterator it = this->regions.begin(); it != this->regions.end(); ++it) {
+			Chunk** region = it->second;
+			int numUsed = 0;
+			for (int x = 0; x < REGION_LENGTH; x++) {
+				if (region[x] == NULL) {
+					continue;
+				}
+
+				int3 chunkPosition = region[x]->getChunkPosition();
+				vec2 chunkWorldPos = vec2(chunkPosition.x, chunkPosition.z) * vec2(CHUNK_SIZE, CHUNK_SIZE);
+				
+				float dist = distance(chunkWorldPos, vec2(center.x, center.z));
+				if (dist >= this->removeDistance) {
+					delete region[x];
+					region[x] = NULL;
+				}
+				else {
+					numUsed++;
+				}
+			}
+
+			if (numUsed == 0) {
+				delete[] region;
+				toRemove.push_back(it->first);
+			}
+		}
+
+		for (int x = 0; x < toRemove.size(); x++) {
+			this->regions.erase(toRemove[x]);
+		}
+	}
+
+	if (this->regions.empty()) {
+		ReleaseMutex(this->regionsMutex);
+		return;
 	}
 
 	int maxUpload = 4;
@@ -175,7 +223,7 @@ void World::render(vec3 center)
 	Chunk** currentRegion = NULL;
 	uint64_t currentRegionHash;
 
-	for (int centerY = CLAMP(centerChunk.y - VIEW_DIST_Y); centerY < CLAMP(centerChunk.y + VIEW_DIST_Y); centerY++)
+	for (int centerY = 0; centerY < CLAMP(centerChunk.y + VIEW_DIST_Y); centerY++)
 	{
 		for (int centerX = CLAMP(centerChunk.x - VIEW_DIST_XZ); centerX < CLAMP(centerChunk.x + VIEW_DIST_XZ); centerX++)
 		{
@@ -214,4 +262,6 @@ void World::render(vec3 center)
 			}
 		}
 	}
+
+	ReleaseMutex(this->regionsMutex);
 }

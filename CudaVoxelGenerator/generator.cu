@@ -34,6 +34,25 @@ __device__ uint32_t hashInt3(int x, int y, int z)
     return (x * 607495) + (y * 359609) + (z * 654846);
 }
 
+__global__ void kernel_generator_fillChunk_nonOpt_dim3(uint8_t* chunkData, int3 worldPosition)
+{
+    int idx = threadIdx.x + blockDim.x * blockIdx.x;
+    int idy = threadIdx.y + blockDim.y * blockIdx.y;
+    int idz = threadIdx.z + blockDim.z * blockIdx.z;
+
+    int worldX = idx + worldPosition.x;
+    int worldY = idy + worldPosition.y;
+    int worldZ = idz + worldPosition.z;
+
+    int height = generate_terrain_height(worldX, worldZ);
+
+    uint8_t block = 0;
+    if (worldY == height) block = 3;
+    else if (worldY < height && worldY > height - 3) block = 2;
+    else if (worldY < height) block = 1;
+    chunkData[CHUNK_OFFSET(idx, idy, idz)] = block;
+}
+
 __global__ void kernel_generator_fillChunk_dim3(uint8_t* chunkData, int3 worldPosition)
 {
     __shared__ int terrainHeight[CHUNK_SIZE * CHUNK_SIZE];
@@ -228,6 +247,7 @@ void cuda_generate_chunk(Chunk* chunk)
 
     int3 worldBlockPos = make_int3((int)worldPosition.x, (int)worldPosition.y, (int)worldPosition.z);
     kernel_generator_fillChunk_dim3 << <grid, block >> > (gpuChunkBlocks, worldBlockPos);
+    //kernel_generator_fillChunk_nonOpt_dim3 << <grid, block >> > (gpuChunkBlocks, worldBlockPos);
     if (CONFIG_NUM_TREES > 0) {
         kernel_decorator_trees << <1, CONFIG_NUM_TREES >> > (gpuChunkBlocks, worldBlockPos, gpuTreeTemplate, make_int3(TREE_TEMPLATE_SIZE));
     }

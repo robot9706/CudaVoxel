@@ -7,6 +7,9 @@
     <ClCompile Include="graphics.cpp" />
     <ClCompile Include="loop.cpp" />
     <ClCompile Include="world.cpp" />
+    <ClCompile Include="generator_cpu.cpp">
+      <Filter>generator</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="chunk.h" />
@@ -21,6 +24,12 @@
       <Filter>generator</Filter>
     </ClInclude>
     <ClInclude Include="world.h" />
+    <ClInclude Include="generator_cpu.h">
+      <Filter>generator</Filter>
+    </ClInclude>
+    <ClInclude Include="generator_config.h">
+      <Filter>generator</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

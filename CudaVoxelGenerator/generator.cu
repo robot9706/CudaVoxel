@@ -10,14 +10,11 @@
 #include "chunk.h"
 #include "simplex.cuh"
 
+#include "generator_config.h"
+#include "generator_cpu.h"
+
 static uint8_t* gpuChunkBlocks;
-
-#define CONFIG_SEED_BASE 1234
-
-#define CONFIG_TERRAIN_HEIGHT 24
-#define CONFIG_NUM_TREES 2
-#define CONFIG_DIRT_HEIGHT 5
-#define CONFIG_CAVE_THRESHOLD 0.675f
+static uint32_t* gpuTerrainHeightMap;
 
 __constant__ uint8_t terrainConst[CONFIG_TERRAIN_HEIGHT];
 
@@ -26,7 +23,7 @@ __device__ int generate_terrain_height(int worldX, int worldZ)
     float simplexValue = repeaterSimplex(make_float3(static_cast<float>(worldX) / 64.0f, 0.0f, static_cast<float>(worldZ) / 64.0f), 1.0f, CONFIG_SEED_BASE, 3, 3.0f, 0.25f);
     simplexValue = ((simplexValue + 1.0f) / 2.0f);
 
-    return (int)floorf(simplexValue * CONFIG_TERRAIN_HEIGHT);
+    return (int)floorf(simplexValue * CONFIG_TERRAIN_HEIGHT) + 1;
 }
 
 __device__ uint32_t hashInt3(int x, int y, int z)
@@ -63,6 +60,42 @@ __global__ void kernel_generator_fillChunk_dim3(uint8_t* chunkData, int3 worldPo
 
     terrainHeight[idx + CHUNK_SIZE * idz] = 0;
     __syncthreads();
+
+    int worldX = idx + worldPosition.x;
+    int worldY = idy + worldPosition.y;
+    int worldZ = idz + worldPosition.z;
+
+    int height = 0;
+    if (terrainHeight[idx + CHUNK_SIZE * idz] == 0)
+    {
+        terrainHeight[idx + CHUNK_SIZE * idz] = height = generate_terrain_height(worldX, worldZ);
+    }
+    else
+    {
+        height = terrainHeight[idx + CHUNK_SIZE * idz];
+    }
+
+    if (worldY > height)
+    {
+        return;
+    }
+
+    float cave = repeaterSimplex(make_float3(static_cast<float>(worldX) / 64.0f, static_cast<float>(worldY) / 64.0f, static_cast<float>(worldZ) / 64.0f), 1.0f, CONFIG_SEED_BASE, 3, 3.0f, 0.25f);
+    cave = ((cave + 1.0f) / 2.0f);
+    if (cave >= CONFIG_CAVE_THRESHOLD)
+    {
+        return;
+    }
+
+    int offset = height - worldY;
+    chunkData[CHUNK_OFFSET(idx, idy, idz)] = terrainConst[offset];
+}
+
+__global__ void kernel_generator_fillChunk_memHeightmap_dim3(uint8_t* chunkData, int3 worldPosition, uint32_t* terrainHeight)
+{
+    int idx = threadIdx.x + blockDim.x * blockIdx.x;
+    int idy = threadIdx.y + blockDim.y * blockIdx.y;
+    int idz = threadIdx.z + blockDim.z * blockIdx.z;
 
     int worldX = idx + worldPosition.x;
     int worldY = idy + worldPosition.y;
@@ -196,6 +229,8 @@ __global__ void kernel_decorator_trees(uint8_t* chunkData, int3 worldPosition, u
 
 void cuda_generate_init()
 {
+    cpu_generate_init();
+
     CUDA_CHECK(cudaSetDevice(0));
 
     CUDA_CHECK(cudaMalloc((void**)&gpuChunkBlocks, CHUNK_BLOCKS));
@@ -203,6 +238,7 @@ void cuda_generate_init()
     CUDA_CHECK(cudaMalloc((void**)&gpuTreeTemplate, sizeof(treeTemplate)));
     CUDA_CHECK(cudaMemcpy(gpuTreeTemplate, treeTemplate, sizeof(treeTemplate), cudaMemcpyKind::cudaMemcpyHostToDevice));
 
+    // Konstans memória
     uint8_t terrainData[CONFIG_TERRAIN_HEIGHT] = { 0 };
     for (int x = 0; x < CONFIG_TERRAIN_HEIGHT; x++)
     {
@@ -219,11 +255,16 @@ void cuda_generate_init()
             terrainData[x] = BLOCK_STONE;
         }
     }
-    cudaMemcpyToSymbol(terrainConst, terrainData, sizeof(uint8_t) * CONFIG_TERRAIN_HEIGHT, 0, cudaMemcpyKind::cudaMemcpyHostToDevice);
+    CUDA_CHECK(cudaMemcpyToSymbol(terrainConst, terrainData, sizeof(uint8_t) * CONFIG_TERRAIN_HEIGHT, 0, cudaMemcpyKind::cudaMemcpyHostToDevice));
+
+    // Magasság térkép
+    CUDA_CHECK(cudaMalloc((void**)&gpuTerrainHeightMap, CHUNK_SIZE * CHUNK_SIZE * sizeof(uint32_t)));
 }
 
 void cuda_generate_clean()
 {
+    cpu_generate_clean();
+
     CUDA_CHECK(cudaFree(gpuChunkBlocks));
     CUDA_CHECK(cudaFree(gpuTreeTemplate));
 }
@@ -232,7 +273,13 @@ void cuda_generate_clean()
 // Többi átlag: 0.9ms
 void cuda_generate_chunk(Chunk* chunk)
 {
+#ifndef GEN_ON_GPU
+    cpu_generate_chunk(chunk);
+    return;
+#endif
+
     CUDA_CHECK(cudaMemset(gpuChunkBlocks, 0, CHUNK_BLOCKS));
+    CUDA_CHECK(cudaMemset(gpuTerrainHeightMap, 0, CHUNK_SIZE * CHUNK_SIZE * sizeof(uint32_t)));
 
     int3 chunkPos = chunk->getChunkPosition();
     vec3 worldPosition = vec3(chunkPos.x, chunkPos.y, chunkPos.z) * (float)CHUNK_SIZE;
@@ -246,11 +293,26 @@ void cuda_generate_chunk(Chunk* chunk)
     CUDA_CHECK(cudaEventRecord(start, 0));
 
     int3 worldBlockPos = make_int3((int)worldPosition.x, (int)worldPosition.y, (int)worldPosition.z);
+    
+    // Eredeti CUDA:
+#ifdef GEN_NAIV
+    kernel_generator_fillChunk_nonOpt_dim3 << <grid, block >> > (gpuChunkBlocks, worldBlockPos);
+#endif
+
+    // Shared memória CUDA:
+#ifdef GEN_CONST_MEM_SHARED_MEM
     kernel_generator_fillChunk_dim3 << <grid, block >> > (gpuChunkBlocks, worldBlockPos);
-    //kernel_generator_fillChunk_nonOpt_dim3 << <grid, block >> > (gpuChunkBlocks, worldBlockPos);
-    if (CONFIG_NUM_TREES > 0) {
+#endif
+
+    // GPU memória magasság térkép:
+#ifdef GEN_HEIGHTMAP
+    kernel_generator_fillChunk_memHeightmap_dim3 << <grid, block >> > (gpuChunkBlocks, worldBlockPos, gpuTerrainHeightMap);
+#endif
+    
+    // Dekorálás (túl optimalizálatlan)
+    /*if (CONFIG_NUM_TREES > 0) {
         kernel_decorator_trees << <1, CONFIG_NUM_TREES >> > (gpuChunkBlocks, worldBlockPos, gpuTreeTemplate, make_int3(TREE_TEMPLATE_SIZE));
-    }
+    }*/
 
     // Time
     CUDA_CHECK(cudaEventCreate(&stop));

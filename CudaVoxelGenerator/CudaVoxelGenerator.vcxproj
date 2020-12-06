@@ -84,6 +84,8 @@
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="generator_config.h" />
+    <ClInclude Include="generator_cpu.h" />
     <ClInclude Include="world.h" />
     <CudaCompile Include="generator.cu" />
     <ClInclude Include="simplex.cuh" />
@@ -99,6 +101,7 @@
   <ItemGroup>
     <ClCompile Include="chunk.cpp" />
     <ClCompile Include="entry.cpp" />
+    <ClCompile Include="generator_cpu.cpp" />
     <ClCompile Include="gl.cpp" />
     <ClCompile Include="graphics.cpp" />
     <ClCompile Include="loop.cpp" />

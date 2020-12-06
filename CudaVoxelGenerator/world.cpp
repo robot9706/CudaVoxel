@@ -3,7 +3,6 @@
 #define VIEW_DIST_XZ 6
 #define VIEW_DIST_Y 3
 
-#include "generator.h"
 #include "main.h"
 #include "log.h"
 

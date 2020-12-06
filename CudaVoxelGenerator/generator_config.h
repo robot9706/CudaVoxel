@@ -1,0 +1,15 @@
+#pragma once
+
+#define CONFIG_SEED_BASE 1234
+
+#define CONFIG_TERRAIN_HEIGHT 24
+#define CONFIG_NUM_TREES 2
+#define CONFIG_DIRT_HEIGHT 5
+#define CONFIG_CAVE_THRESHOLD 0.675f
+
+
+#define GEN_ON_GPU
+
+//#define GEN_NAIV
+//#define GEN_CONST_MEM_SHARED_MEM
+#define GEN_HEIGHTMAP
